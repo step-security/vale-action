@@ -1,0 +1,41 @@
+{
+    "name": "vale-action",
+    "version": "2.1.2",
+    "description": "The official GitHub Action for Vale -- install, manage, and run Vale with ease.",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc --noEmit && ncc build src/main.ts -o dist --minify && cp src/rdjsonl.tmpl dist/rdjsonl.tmpl",
+        "format": "prettier --write **/*.ts",
+        "test": "jest"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/step-security/vale-action.git"
+    },
+    "keywords": [
+        "actions",
+        "container",
+        "toolkit",
+        "setup"
+    ],
+    "author": "step-security",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/step-security/vale-action/issues"
+    },
+    "homepage": "https://github.com/step-security/vale-action#readme",
+    "dependencies": {
+        "@actions/core": "^2.0.3",
+        "@actions/exec": "^2.0.0",
+        "@actions/tool-cache": "^3.0.1",
+        "@types/node-fetch": "^2.6.13",
+        "axios": "^1.18.1",
+        "node-fetch": "^2.7.0"
+    },
+    "devDependencies": {
+        "@types/node": "^24.12.4",
+        "@vercel/ncc": "^0.38.4",
+        "prettier": "^3.8.3",
+        "typescript": "^5.9.3"
+    }
+}
