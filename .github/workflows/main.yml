@@ -1,0 +1,15 @@
+name: reviewdog
+on: push
+
+jobs:
+  vale:
+    name: runner / vale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./ # Uses an action in the root directory
+        with:
+          reporter: github-check
+          fail_on_error: true
+          level: warning
+          debug: true
