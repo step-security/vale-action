@@ -42,6 +42,12 @@ jobs:
 >
 > See the [Vale documentation][2] for more information.
 
+> [!TIP]
+> To use it with asciidoc add the following step to your workflow before calling `vale-action`:
+> ```yaml
+>       - name: Install Asciidoctor
+>         run: sudo apt-get install -y asciidoctor
+
 ## Repository Structure
 
 The recommended repository structure makes use of the existing `.github` 
