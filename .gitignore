@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 
 .idea
 node_modules
+lib

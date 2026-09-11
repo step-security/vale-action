@@ -12,7 +12,7 @@
 >
 > ```diff
 > - uses: errata-ai/vale-action@v2
-> + uses: vale-cli/vale-action@v2
+> + uses: step-security/vale-action@v3
 > ```
 
 <p align="center">
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: step-security/vale-action@v2
+      - uses: step-security/vale-action@v3
 ```
 
 > [!TIP]
@@ -72,7 +72,7 @@ This requires the `github-pr-review` reporter, since it's the only one that
 posts review comments:
 
 ```yaml
-- uses: vale-cli/vale-action@v2.1.1
+- uses: step-security/vale-action@v3
   with:
     reporter: github-pr-review
 ```
@@ -80,6 +80,14 @@ posts review comments:
 A suggestion is only offered when the rule declares an [action][6] and the
 flagged text still matches what's in the file, so alerts that span markup are
 reported without one.
+
+> [!NOTE]
+> A pull request from a fork runs with a [read-only token][10], and posting a
+> review comment is a write. Suggestions -- and the `github-pr-check` and
+> `github-check` reporters, which write a check run -- are unavailable there.
+>
+> The default reporter still annotates a fork's pull request: it writes those
+> through the runner's log rather than the API, which needs no write access.
 
 ## Repository Structure
 
@@ -114,13 +122,13 @@ it runs. To download them only when they change, restore the `StylesPath`
 from a cache and tell the action to skip the sync on a hit:
 
 ```yaml
-- uses: actions/cache@v4
+- uses: actions/cache@v6
   id: styles
   with:
     path: .github/styles
     key: vale-${{ hashFiles('.vale.ini') }}
 
-- uses: vale-cli/vale-action@v2.1.1
+- uses: step-security/vale-action@v3
   with:
     sync: ${{ steps.styles.outputs.cache-hit != 'true' }}
 ```
@@ -138,7 +146,7 @@ To add an input, edit your workflow file and add the `with` key to the `uses`
 block. For example:
 
 ```yaml
-- uses: step-security/vale-action@v2
+- uses: step-security/vale-action@v3
   with:
     version: 2.17.0
 ```
@@ -365,11 +373,13 @@ with:
   token: ${{secrets.VALE_GITHUB_TOKEN}}
 ```
 
-[2]: https://vale.sh/docs/topics/scoping/#formats
-[3]: https://vale.sh/docs/topics/styles/
-[4]: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
-[5]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/incorporating-feedback-in-your-pull-request
-[6]: https://vale.sh/docs/topics/actions
-[7]: https://vale.sh/docs/packages
-[8]: https://vale.sh/docs/filters
-[9]: https://vale.sh/docs/cli
+[1]: https://docs.github.com/en/actions/how-tos/write-workflows
+[2]: https://docs.vale.sh/topics/scopes
+[3]: https://docs.vale.sh/keys/stylespath
+[4]: https://docs.github.com/en/actions/tutorials/authenticate-with-github_token
+[5]: https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/incorporating-feedback-in-your-pull-request
+[6]: https://docs.vale.sh/topics/actions
+[7]: https://docs.vale.sh/keys/packages
+[8]: https://docs.vale.sh/topics/filters
+[9]: https://docs.vale.sh/guides/globbing
+[10]: https://docs.github.com/en/actions/concepts/security/github_token
