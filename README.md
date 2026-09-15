@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: step-security/vale-action@v2
+      - uses: step-security/vale-action@v3
 ```
 
 > [!TIP]
@@ -41,6 +41,43 @@ jobs:
 > ```
 >
 > See the [Vale documentation][2] for more information.
+
+> [!TIP]
+> To use it with asciidoc add the following step to your workflow before calling `vale-action`:
+> ```yaml
+>       - name: Install Asciidoctor
+>         run: sudo apt-get install -y asciidoctor
+
+The action runs on the Linux, macOS, and Windows runners, on both x86-64 and
+ARM. The one gap is Windows on ARM, which Vale has no build for.
+
+## Suggested fixes
+
+Vale knows how to resolve some of the alerts it reports -- a substitution
+knows what to swap in, a spelling error has candidate spellings -- which the
+action offers as [suggested changes][5] that reviewers can commit from the
+pull request itself.
+
+This requires the `github-pr-review` reporter, since it's the only one that
+posts review comments:
+
+```yaml
+- uses: step-security/vale-action@v3
+  with:
+    reporter: github-pr-review
+```
+
+A suggestion is only offered when the rule declares an [action][6] and the
+flagged text still matches what's in the file, so alerts that span markup are
+reported without one.
+
+> [!NOTE]
+> A pull request from a fork runs with a [read-only token][10], and posting a
+> review comment is a write. Suggestions -- and the `github-pr-check` and
+> `github-check` reporters, which write a check run -- are unavailable there.
+>
+> The default reporter still annotates a fork's pull request: it writes those
+> through the runner's log rather than the API, which needs no write access.
 
 ## Repository Structure
 
@@ -68,6 +105,28 @@ MinAlertLevel = suggestion
 BasedOnStyles = Vale
 ```
 
+## Caching
+
+`vale sync` downloads every [package][7] your configuration names, every time
+it runs. To download them only when they change, restore the `StylesPath`
+from a cache and tell the action to skip the sync on a hit:
+
+```yaml
+- uses: actions/cache@v6
+  id: styles
+  with:
+    path: .github/styles
+    key: vale-${{ hashFiles('.vale.ini') }}
+
+- uses: step-security/vale-action@v3
+  with:
+    sync: ${{ steps.styles.outputs.cache-hit != 'true' }}
+```
+
+The Vale and `reviewdog` binaries go into the runner's tool cache, which a
+self-hosted runner keeps between jobs. The hosted runners start each job on a
+fresh machine, so there they're downloaded once per job.
+
 ## Inputs
 
 You can further customize the linting processing by providing one of the 
@@ -77,7 +136,7 @@ To add an input, edit your workflow file and add the `with` key to the `uses`
 block. For example:
 
 ```yaml
-- uses: step-security/vale-action@v2
+- uses: step-security/vale-action@v3
   with:
     version: 2.17.0
 ```
@@ -122,6 +181,16 @@ is determined by the input value `separator`:
       separator: ","
     ```
 
+### `sync` (default: true)
+
+Run `vale sync` before linting. Set to `false` when you restore the
+`StylesPath` from a cache yourself; see [Caching](#caching).
+
+```yaml
+with:
+  sync: false
+```
+
 ### `reporter` (default: github-pr-check)
 
 Set the [reporter](https://github.com/reviewdog/reviewdog#reporters) type.
@@ -134,14 +203,27 @@ with:
 
 ### `fail_on_error` (default: false)
 
-By default, `reviewdog` will return exit code `0` even if it finds errors. If 
-`fail_on_error` is enabled, `reviewdog` exits with `1` when at least one error
-was reported.
+By default, the action succeeds whatever Vale reports. With `fail_on_error`,
+it fails when Vale reports an alert at the `error` level -- and only then, so
+a warning or a suggestion still passes.
 
 ```yaml
 with:
   fail_on_error: true
 ```
+
+### `fail_level` (default: unset)
+
+The severity at which the run fails: `none`, `any`, `info`, `warning`, or
+`error`. It takes precedence over `fail_on_error`, which is the same setting
+with two positions rather than five.
+
+```yaml
+with:
+  fail_level: warning
+```
+
+Needs `reviewdog` 0.21.0 or later; see [`reviewdog_version`](#reviewdog_version-default-0210).
 
 ### `filter_mode` (default: added)
 
@@ -154,18 +236,122 @@ with:
   filter_mode: nofilter
 ```
 
+### `config` (default: "")
+
+A path to the `.vale.ini` to lint with, for a configuration that doesn't sit
+where Vale would look for it.
+
+```yaml
+with:
+  config: docs/.vale.ini
+```
+
+### `filter` (default: "")
+
+An [expression][8] that decides which rules run. Report only errors, or only
+one style, without editing the configuration:
+
+```yaml
+with:
+  filter: '.Level == "error"'
+```
+
+### `glob` (default: "")
+
+A [glob pattern][9] limiting which files Vale reads.
+
+```yaml
+with:
+  glob: '*.{md,txt}'
+```
+
+### `min_alert_level` (default: "")
+
+The lowest level worth reporting: `suggestion`, `warning`, or `error`.
+
+```yaml
+with:
+  min_alert_level: warning
+```
+
 ### `vale_flags` (default: "")
 
 Space-delimited list of flags for the Vale CLI. To see a full list of available 
 flags, run `vale -h`.
 
-Note that flags should not include quotes.
-So while `--glob='*.txt'` works with Vale, it does not work with this action.
-Use the flag without quotes, as in the following example:
+Anything without an input of its own goes here. Quotes group what they
+surround, as they would in a shell, so a flag can carry spaces:
 
 ```yaml
 with:
-  vale_flags: "--glob=*.txt"
+  vale_flags: "--glob=*.txt --filter='.Level == \"error\"'"
+```
+
+A backslash means a backslash rather than an escape, so Windows paths need no
+special handling.
+
+### `level` (default: unset)
+
+The [report level](https://github.com/reviewdog/reviewdog#reporters) for
+`reviewdog`, which decides what a check reporter concludes: `error` fails the
+check, `info` and `warning` leave it neutral.
+
+```yaml
+with:
+  # info, warning, error
+  level: error
+```
+
+Left unset, the level follows `fail_on_error` and whether Vale found errors.
+
+### `workdir` (default: .)
+
+The directory to run Vale in, relative to the repository root. Use it when
+the `.vale.ini` lives somewhere other than the top level.
+
+```yaml
+with:
+  workdir: docs
+```
+
+### `separator` (default: "")
+
+The character that splits the `files` input into a list; see
+[`files`](#files-default-all).
+
+```yaml
+with:
+  separator: ","
+```
+
+### `debug` (default: false)
+
+Log the resolved Vale version and arguments.
+
+```yaml
+with:
+  debug: true
+```
+
+### `reviewdog_version` (default: 0.21.0)
+
+The `reviewdog` release to install. The action checks each download against
+the release's published checksums.
+
+```yaml
+with:
+  reviewdog_version: 0.21.0
+```
+
+### `reviewdog_url` (default: "")
+
+A URL to a `tar.gz` build of `reviewdog` to use in place of the published
+release. A build named this way skips both the tool cache and the checksum
+check, since neither has anything to say about it.
+
+```yaml
+with:
+  reviewdog_url: https://example.com/reviewdog.tar.gz
 ```
 
 ### `token` (default: [`secrets.GITHUB_TOKEN`][4])
@@ -177,6 +363,13 @@ with:
   token: ${{secrets.VALE_GITHUB_TOKEN}}
 ```
 
-[2]: https://vale.sh/docs/topics/scoping/#formats
-[3]: https://vale.sh/docs/topics/styles/
-[4]: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+[1]: https://docs.github.com/en/actions/how-tos/write-workflows
+[2]: https://docs.vale.sh/topics/scopes
+[3]: https://docs.vale.sh/keys/stylespath
+[4]: https://docs.github.com/en/actions/tutorials/authenticate-with-github_token
+[5]: https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/incorporating-feedback-in-your-pull-request
+[6]: https://docs.vale.sh/topics/actions
+[7]: https://docs.vale.sh/keys/packages
+[8]: https://docs.vale.sh/topics/filters
+[9]: https://docs.vale.sh/guides/globbing
+[10]: https://docs.github.com/en/actions/concepts/security/github_token
